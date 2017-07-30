@@ -475,15 +475,18 @@ max(int a, int b)
     return b;
 }
 
+static inline int 
+min(int a, int b)
+{
+    if(a < b)
+        return a;
+    return b;
+}
+
 static void
 my_strlcpy(char *dest, size_t count, const char *src, size_t count2)
 {
     size_t id = 0;
-    //for(char *a=(char *)src_begin; a < src_end && i < count; ++a, ++i)
-    //dest[i] = *a;
-    for(char *a = (char *)src_begin; a < src_end && i < count; ++a, ++i, ++dest)
-        *dest = *a;
-
     while(dest!='\0') {
         ++dest;
         ++id;
@@ -506,7 +509,7 @@ OnCharacters(void * ctx,
     EpubInfo *info = (EpubInfo *)(handler->_private);
     switch (info->my_state) {
     case CREATOR_OPENED: {
-        //const int len2 = max(len, MAX_STR_LEN);
+        const int len2 = min(len, MAX_STR_LEN);
         my_strlcpy(info->creator, MAX_STR_LEN, (const char *)ch, len2);
         /* https://developer.gnome.org/glib/stable/glib-String-Utility-Functions.html#g-strlcat */
         //g_strlcat(info->creator, (const char *)ch, len2);
@@ -516,13 +519,13 @@ OnCharacters(void * ctx,
         }
         break;
     case BOOK_TITLE_OPENED: {
-        const int len2 = max(len, MAX_STR_LEN);
+        const int len2 = min(len, MAX_STR_LEN);
         strncpy(info->title, (const char *)ch, len2);
         info->my_state = BOOK_TITLE_END;
         }
         break;
     case LANG_OPENED: {
-        const int len2 = max(len, LANG_LENGTH);
+        const int len2 = min(len, LANG_LENGTH);
         strncpy(info->lang, (const char *)ch, len2);
         info->my_state = LANG_END;
         }
