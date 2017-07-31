@@ -234,38 +234,35 @@ timeout_epub_callback(gpointer data)
                                                      info.creator);
         
             /* Cache the data so that we don't have to read it again */
-            g_object_set_data_full(G_OBJECT (handle->file), 
+            g_object_set_data(G_OBJECT (handle->file), 
                                             "EpubExtension::epub_title",
-                                            g_strdup(info.title),
-                                            g_free);
-            g_object_set_data_full(G_OBJECT (handle->file), 
+                                            info.title);
+
+            g_object_set_data(G_OBJECT (handle->file), 
                                             "EpubExtension::epub_lang",
-                                            g_strdup(info.title),
-                                            g_free);
-            g_object_set_data_full(G_OBJECT (handle->file), 
+                                            info.lang);
+            g_object_set_data(G_OBJECT (handle->file), 
                                             "EpubExtension::epub_creator",
-                                            g_strdup(info.last_name),
-                                            g_free);
-            xmlCleanupParser();
+                                            info.creator);
         } else {
             if(result == 1) {
                 nautilus_file_info_add_string_attribute (handle->file,
                                                         "EpubExtension::epub_title",
                                                          info.title);
                 char *data_s = g_strdup_printf("%s", info.title);
-                g_object_set_data_full(G_OBJECT(handle->file), 
+                g_object_set_data(G_OBJECT(handle->file), 
                                         "EpubExtension::epub_title",
-                                        data_s,
-                                        g_free);
+                                        data_s);
+                g_free(data_s)
             } else {
                 char *data_s = g_strdup_printf("%s, Code: %d", epub_errors[result], result);
                 nautilus_file_info_add_string_attribute (handle->file,
                                                         "EpubExtension::epub_title",
                                                          data_s);
-                g_object_set_data_full(G_OBJECT(handle->file), 
+                g_object_set_data(G_OBJECT(handle->file), 
                                         "EpubExtension::epub_title",
-                                        data_s,
-                                        g_free);
+                                        data_s);
+                g_free(data_s)
             }
         }
         g_free(filename);
@@ -321,8 +318,14 @@ read_from_epub(const char *archive, EpubInfo *info)
     xmlSAXHandler SAXHander;
     make_sax_handler_container(&SAXHander, contentFilename);
  
+    fread_len = zip_fread(zf, buffer, sizeof(buffer));
+    if(fread_len <= 0) {
+        zip_fclose(zf);
+        zip_close(za);
+        return(3);
+    }
     xmlParserCtxtPtr ctxt = xmlCreatePushParserCtxt(
-        &SAXHander, NULL, buffer, res, NULL
+        &SAXHander, NULL, buffer, fread_len, NULL
     );    
     while(1) {
         fread_len = zip_fread(zf, buffer, sizeof(buffer));
@@ -342,9 +345,15 @@ read_from_epub(const char *archive, EpubInfo *info)
         zip_close(za);
         return(3);
     }
+    fread_len = zip_fread(zf, buffer, sizeof(buffer));
+    if(fread_len <= 0) {
+        zip_fclose(zf);
+        zip_close(za);
+        return(3);
+    }
     make_sax_handler_contentOPF(&SAXHander, contentFilename);
     xmlParserCtxtPtr ctxt2 = xmlCreatePushParserCtxt(
-        &SAXHander, NULL, buffer, res, NULL
+        &SAXHander, NULL, buffer, fread_len, NULL
     );    
     while(1) {
         fread_len = zip_fread(zf, buffer, sizeof(buffer));
@@ -442,7 +451,7 @@ OnStartElementContainerNs(
             const xmlChar *a_valueBegin = attributes[index+3];
             const xmlChar *a_valueEnd = attributes[index+4];
             if(g_strcmp0((const char*)a_localname, "full-path") == 0) {
-                my_strlcpy(fname, (const char *)valueBegin, (const char *)valueEnd, MAX_STR_LEN);
+                my_strlcpy(fname, (const char *)a_valueBegin, (const char *)a_valueEnd, MAX_STR_LEN);
             }
             /*
             if(g_strcmp0((const char*)a_localname, "media-type") == 0) {
@@ -451,7 +460,7 @@ OnStartElementContainerNs(
             }
             */
             if( g_strcmp0((const char*)a_localname, "media-type") == 0 &&
-                my_strncmp("application/oebps-package+xml", (const char *)valueBegin, (const char *)valueEnd, MAX_STR_LEN) == 0
+                my_strncmp("application/oebps-package+xml", (const char *)a_valueBegin, (const char *)a_valueEnd, MAX_STR_LEN) == 0
                 ) {
                 media_type_flag = 1;
             }
@@ -484,16 +493,29 @@ min(int a, int b)
 }
 
 static void
-my_strlcpy(char *dest, size_t count, const char *src, size_t count2)
+my_strlcat_names(char *dest, size_t count, const char *src, size_t count2)
 {
     size_t id = 0;
-    while(dest!='\0') {
-        ++dest;
+    char *d = dest;
+    while(d != '\0') {
+        ++d;
         ++id;
     }
+    if(d != dest) {
+        if(id!=count) {
+            *d = ',';
+            ++d;
+            ++id;
+        }
+        if(id!=count) {
+            *d = ' ';
+            ++d;
+            ++id;
+        }
+    }
     char *s = (char *)src;
-    for(size_t is = 0; is < count2 && id < count && *src!='\0'; ++dest, ++id, ++is, ++s)
-        *dest = *s;
+    for(size_t is = 0; is < count2 && id < count && *src!='\0'; ++d, ++id, ++is, ++s)
+        *d = *s;
     dest[count-1] = '\0';
 }
 
@@ -510,7 +532,7 @@ OnCharacters(void * ctx,
     switch (info->my_state) {
     case CREATOR_OPENED: {
         const int len2 = min(len, MAX_STR_LEN);
-        my_strlcpy(info->creator, MAX_STR_LEN, (const char *)ch, len2);
+        my_strlcat_names(info->creator, MAX_STR_LEN, (const char *)ch, len2);
         /* https://developer.gnome.org/glib/stable/glib-String-Utility-Functions.html#g-strlcat */
         //g_strlcat(info->creator, (const char *)ch, len2);
         /* Since C11 */

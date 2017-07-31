@@ -26,8 +26,8 @@ static NautilusOperationResult epub_extension_update_file_info (
 gint timeout_epub_callback(gpointer data);
 
 /* ------- Start Epub only */
-static const int MAX_STR_LEN = 256;
-static const int ZIP_BUFFER_LEN = 1024;
+#define MAX_STR_LEN 256
+#define ZIP_BUFFER_LEN 1024
 
  enum FSM_State {
     INIT,
@@ -40,7 +40,7 @@ static const int ZIP_BUFFER_LEN = 1024;
     STOP
 };
 
-static const int LANG_LENGTH = 6;
+#define LANG_LENGTH 6
 typedef struct {
     char title[MAX_STR_LEN];
     char creator[MAX_STR_LEN];
@@ -49,7 +49,6 @@ typedef struct {
 } EpubInfo;
         
 static int read_from_epub(const char *archive, EpubInfo *info);
-static int parse_xml_from_buffer(char *content, zip_uint64_t uncomp_size, EpubInfo *info);
 
 static void make_sax_handler_container(xmlSAXHandler *SAXHander, void *user_data);
 static void make_sax_handler_contentOPF(xmlSAXHandler *SAXHander, void *user_data);
