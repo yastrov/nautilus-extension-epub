@@ -77,6 +77,14 @@ epub_extension_info_provider_iface_init (NautilusInfoProviderIface *iface) {
     return;
 }
 
+#ifdef PROPERTY
+static void
+epub_extension_propertypage_provider_iface_init (NautilusPropertyPageProviderIface *iface)
+{
+    iface->get_pages = epub_extension_get_pages;
+}
+#endif
+
 /* Extension */
 static void
 epub_extension_class_init(EpubExtensionClass *class)
@@ -130,6 +138,17 @@ epub_extension_register_type(GTypeModule *module)
                                      epub_extension_type,
                                      NAUTILUS_TYPE_INFO_PROVIDER,
                                      &info_provider_iface_info);
+        #ifdef PROPERTY
+        static const GInterfaceInfo property_provider_iface_info = {
+            (GInterfaceInitFunc) epub_extension_propertypage_provider_iface_init,
+            NULL,
+            NULL
+        };
+        g_type_module_add_interface (module,
+                                     epub_extension_type,
+                                     NAUTILUS_TYPE_PROPERTY_PAGE_PROVIDER,
+                                     &property_provider_iface_info);
+        #endif
 }
 
 GType
@@ -610,3 +629,134 @@ OnEndElementNs(
     if (g_strcmp0((const char*)localname, "metadata") == 0)
         xmlStopParser(ctx);
 }
+
+#ifdef PROPERTY
+static GList *
+epub_extension_get_pages (NautilusPropertyPageProvider *provider,
+                         GList *files)
+{
+    GList *pages;
+    NautilusPropertyPage *page;
+    NautilusFileInfo *file;
+    GtkWidget *table;
+
+    // only show property page when a single file is selected:
+    if (!files || files->next != NULL) {
+            return NULL;
+    }
+    
+    file = files->data;
+
+    /* only show property page for certain file types: */
+    if (!nautilus_file_info_is_mime_type(file, "application/epub+zip")) {
+            return NULL;
+    }
+    
+    pages = NULL;
+    /*gchar *name;
+    name = nautilus_file_info_get_uri (file);
+
+    properties = gtk_button_new_with_label (name);
+    */
+    gtk_widget_show(table);
+    page = nautilus_property_page_new ("EpubExtension::property_page",
+                                    gtk_label_new ("Epub info"),
+                                    table);
+    pages = g_list_append (pages, page);
+    char *title = g_object_get_data(G_OBJECT(file), "EpubExtension::epub_title");
+    char *lang = g_object_get_data(G_OBJECT(file), "EpubExtension::epub_lang");
+    char *creator = g_object_get_data(G_OBJECT(file), "EpubExtension::epub_creator");
+    if(!title) {
+        char *filename = g_file_get_path(nautilus_file_info_get_location(handle->file));
+        EpubInfo info;
+        const int result = read_from_epub(filename, &info);
+        if(result == 0) {
+            nautilus_file_info_add_string_attribute(handle->file,
+                                                    "EpubExtension::epub_title",
+                                                     info.title);
+            title = info.title;
+            nautilus_file_info_add_string_attribute(handle->file,
+                                                    "EpubExtension::epub_lang",
+                                                     info.lang);
+            lang = info.lang;
+            nautilus_file_info_add_string_attribute(handle->file,
+                                                    "EpubExtension::epub_creator",
+                                                     info.creator);
+            creator = info.creator;
+            /* Cache the data so that we don't have to read it again */
+            g_object_set_data(G_OBJECT (handle->file), 
+                                            "EpubExtension::epub_title",
+                                            info.title);
+            g_object_set_data(G_OBJECT (handle->file), 
+                                            "EpubExtension::epub_lang",
+                                            info.lang);
+            g_object_set_data(G_OBJECT (handle->file), 
+                                            "EpubExtension::epub_creator",
+                                            info.creator);
+        } else {
+            if(result == 1) {
+                nautilus_file_info_add_string_attribute (handle->file,
+                                                        "EpubExtension::epub_title",
+                                                         info.title);
+                g_object_set_data(G_OBJECT(handle->file), 
+                                        "EpubExtension::epub_title",
+                                        info.title);
+                title = info.title;
+            } else {
+                char *data_s = g_strdup_printf("%s, Code: %d", epub_errors[result], result);
+                nautilus_file_info_add_string_attribute (handle->file,
+                                                        "EpubExtension::epub_title",
+                                                         data_s);
+                g_object_set_data(G_OBJECT(handle->file), 
+                                        "EpubExtension::epub_title",
+                                        data_s);
+                g_free(data_s);
+            }
+        }
+        g_free(filename);
+    }
+    /* Create GUI*/
+    table = gtk_table_new(3, 2, TRUE);
+    GtkWidget *labelL, labelC, labelT;
+    GtkWidget *labelLd, labelCd, labelTd;
+    labelL = gtk_label_new("Lang:");
+    labelC = gtk_label_new("Creator:");
+    labelT = gtk_label_new("Title:");
+    labelLd = gtk_label_new(lang);
+    labelCd = gtk_label_new(creator);
+    labelTd = gtk_label_new(title);
+
+    /* Table:
+     0    1    2    3    5
+    0+----+----+----+----+
+     |    |    |    |    |
+    1+----+----+----+----+
+     |    |    |    |    |
+    2+----+----+----+----+
+     |    |    |    |    |
+    3+----+----+----+----+
+
+    gint left_attach,     x-координата левой верхней точки зацепления
+    gint right_attach,    x-координата правой нижней точки зацепления
+    gint top_attach,      y-координата левой верхней точки зацепления
+    gint bottom_attach,   y-координата правой нижней точки зацепления
+    */
+    gtk_table_attach(GTK_TABLE (table), labelL, 0, 1, 0, 1,
+                    GTK_EXPAND, GTK_SHRINK, 0, 0);
+    gtk_table_attach(GTK_TABLE (table), labelC, 0, 1, 1, 2,
+                    GTK_EXPAND, GTK_SHRINK, 0, 0);
+    gtk_table_attach(GTK_TABLE (table), labelT, 0, 1, 2, 3,
+                    GTK_EXPAND, GTK_SHRINK, 0, 0);
+
+    gtk_table_attach(GTK_TABLE (table), labelLd, 1, 2, 0, 1,
+                    GTK_EXPAND, GTK_SHRINK, 0, 0);
+    gtk_table_attach(GTK_TABLE (table), labelCd, 1, 2, 0, 1,
+                    GTK_EXPAND, GTK_SHRINK, 0, 0);
+    gtk_table_attach(GTK_TABLE (table), labelTd, 1, 2, 0, 1,
+                    GTK_EXPAND, GTK_SHRINK, 0, 0);
+    /* Add five pixels of spacing between every row and every column. */
+    gtk_table_set_row_spacings (GTK_TABLE (table), 5);
+    gtk_table_set_col_spacings (GTK_TABLE (table), 5);
+    return pages;
+}
+#endif

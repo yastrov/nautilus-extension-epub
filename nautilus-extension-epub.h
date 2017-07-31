@@ -8,6 +8,12 @@ static void epub_extension_column_provider_iface_init(
                                 NautilusColumnProviderIface *iface);
 static void epub_extension_info_provider_iface_init(
                                 NautilusInfoProviderIface *iface);
+#ifdef PROPERTY
+static void epub_extension_propertypage_provider_iface_init (
+                                NautilusPropertyPageProviderIface *iface);
+static GList *epub_extension_get_pages (NautilusPropertyPageProvider *provider,
+                                        GList *files);
+#endif
 static void epub_extension_register_type(GTypeModule *module);
 GType epub_extension_get_type(void);
 
