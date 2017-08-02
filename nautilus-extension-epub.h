@@ -53,6 +53,12 @@ typedef struct {
     char lang[LANG_LENGTH];
     enum FSM_State my_state;
 } EpubInfo;
+
+
+typedef struct {
+    char contentFilename[MAX_STR_LEN];
+    enum FSM_State my_state;
+} AboutContainer;
         
 static int read_from_epub(const char *archive, EpubInfo *info);
 

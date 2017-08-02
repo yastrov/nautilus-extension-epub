@@ -330,12 +330,13 @@ read_from_epub(const char *archive, EpubInfo *info)
         zip_close(za);
         return 2;
     }
-    char contentFilename[MAX_STR_LEN];
+    AboutContainer container;
+    container.my_state == INIT;
     char buffer[ZIP_BUFFER_LEN];
-    memset(contentFilename, 0, sizeof(contentFilename));
+    memset(&container, 0, sizeof(AboutContainer));
     memset(buffer, 0, sizeof(buffer));
     xmlSAXHandler SAXHander;
-    make_sax_handler_container(&SAXHander, contentFilename);
+    make_sax_handler_container(&SAXHander, &container);
  
     fread_len = zip_fread(zf, buffer, sizeof(buffer));
     if(fread_len <= 0) {
@@ -346,7 +347,7 @@ read_from_epub(const char *archive, EpubInfo *info)
     xmlParserCtxtPtr ctxt = xmlCreatePushParserCtxt(
         &SAXHander, NULL, buffer, fread_len, NULL
     );    
-    while(1) {
+    while(container.my_state != STOP) {
         fread_len = zip_fread(zf, buffer, sizeof(buffer));
         if(fread_len <= 0)
             break;
@@ -359,7 +360,7 @@ read_from_epub(const char *archive, EpubInfo *info)
     }
     zip_fclose(zf);
     /* Read book info */
-    zf = zip_fopen(za, contentFilename, ZIP_FL_COMPRESSED);
+    zf = zip_fopen(za, container.contentFilename, ZIP_FL_COMPRESSED);
     if(!zf) {
         zip_close(za);
         return(3);
@@ -370,11 +371,12 @@ read_from_epub(const char *archive, EpubInfo *info)
         zip_close(za);
         return(3);
     }
-    make_sax_handler_contentOPF(&SAXHander, contentFilename);
+    make_sax_handler_contentOPF(&SAXHander, info);
+    info.my_state = INIT;
     xmlParserCtxtPtr ctxt2 = xmlCreatePushParserCtxt(
         &SAXHander, NULL, buffer, fread_len, NULL
     );    
-    while(1) {
+    while(info.my_state != STOP) {
         fread_len = zip_fread(zf, buffer, sizeof(buffer));
         if(fread_len <= 0)
             break;
@@ -455,9 +457,9 @@ OnStartElementContainerNs(
     fprintf (stderr, "Event: OnStartElementContainerNs!\n");
     #endif
     char media_type[MAX_STR_LEN];
-    unsigned char media_type_flag = 0;
     memset(media_type, 0, sizeof(media_type));
     xmlSAXHandlerPtr handler = ((xmlParserCtxtPtr)ctx)->sax;
+    AboutContainer *container = (AboutContainer *)(handler->_private);
     char *fname = (char *)(handler->_private);
     if(g_strcmp0((const char*)localname, "rootfile") == 0) {
         size_t index = 0;
@@ -470,7 +472,7 @@ OnStartElementContainerNs(
             const xmlChar *a_valueBegin = attributes[index+3];
             const xmlChar *a_valueEnd = attributes[index+4];
             if(g_strcmp0((const char*)a_localname, "full-path") == 0) {
-                my_strlcpy(fname, (const char *)a_valueBegin, (const char *)a_valueEnd, MAX_STR_LEN);
+                my_strlcpy(AboutContainer->contentFilename, (const char *)a_valueBegin, (const char *)a_valueEnd, MAX_STR_LEN);
             }
             /*
             if(g_strcmp0((const char*)a_localname, "media-type") == 0) {
@@ -481,7 +483,7 @@ OnStartElementContainerNs(
             if( g_strcmp0((const char*)a_localname, "media-type") == 0 &&
                 my_strncmp("application/oebps-package+xml", (const char *)a_valueBegin, (const char *)a_valueEnd, MAX_STR_LEN) == 0
                 ) {
-                media_type_flag = 1;
+                container->my_state = STOP;
             }
         }
     }
@@ -490,9 +492,6 @@ OnStartElementContainerNs(
         xmlStopParser(ctx);
     }
     */
-    if(media_type_flag == 1) {
-        xmlStopParser(ctx);
-    }
 }
 
 static inline int 
@@ -622,12 +621,10 @@ OnEndElementNs(
     #endif
     xmlSAXHandlerPtr handler = ((xmlParserCtxtPtr)ctx)->sax;
     EpubInfo *info = (EpubInfo *)(handler->_private);
-    if (info->my_state == BOOK_TITLE_END) {
+    if (g_strcmp0((const char*)localname, "metadata") == 0) {
+        info->my_state = STOP;
         xmlStopParser(ctx);
-        return;
     }
-    if (g_strcmp0((const char*)localname, "metadata") == 0)
-        xmlStopParser(ctx);
 }
 
 #ifdef PROPERTY
