@@ -423,18 +423,16 @@ my_strlcpy(char *dest, const char *src_begin, const char *src_end, size_t count)
     size_t i = 0;
     //for(char *a=(char *)src_begin; a < src_end && i < count; ++a, ++i)
     //dest[i] = *a;
-    for(char *a = (char *)src_begin; a < src_end && i < count; ++a, ++i, ++dest)
-        *dest = *a;
+    for(; src_begin < src_end && i < count; ++src_begin, ++i, ++dest)
+        *dest = *src_begin;
 }
 
 static int
 my_strncmp(const char *lhs, const char *rhs_begin, const char *rhs_end, size_t count)
 {
     /*See: http://cmcmsu.no-ip.info/2course/strcmp.feature.htm */
-    char *l = (char *)lhs;
-    char *r = (char *)rhs_begin;
-    for(size_t i = 0; r! = rhs_end && i < count; ++i, ++l, ++r) {
-        if((unsigned char)*l != (unsigned char)*r)
+    for(size_t i = 0; rhs_begin! = rhs_end && i < count; ++i, ++lhs, ++rhs_begin) {
+        if((unsigned char)*lhs != (unsigned char)*rhs_begin)
             return -1;
     }
     return 0;
@@ -531,9 +529,8 @@ my_strlcat_names(char *dest, size_t count, const char *src, size_t count2)
             ++id;
         }
     }
-    char *s = (char *)src;
-    for(size_t is = 0; is < count2 && id < count && *src!='\0'; ++d, ++id, ++is, ++s)
-        *d = *s;
+    for(size_t is = 0; is < count2 && id < count && *src!='\0'; ++d, ++id, ++is, ++src)
+        *d = *src;
     dest[count-1] = '\0';
 }
 
